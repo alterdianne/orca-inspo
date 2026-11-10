@@ -1,0 +1,443 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        --bg: var(--orca-background, #fff);
+        --fg: var(--orca-foreground, #1a1a1c);
+        --muted: var(--orca-muted-foreground, #78787d);
+        --hover: var(--orca-accent, #f3f3f4);
+        --border: var(--orca-border, #e8e8ea);
+        --ring: var(--orca-ring, #a1a1aa);
+        --danger: var(--orca-destructive, #dc2626);
+        --radius: 6px;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font: 13px/1.4 system-ui, -apple-system, sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+        outline: none;
+        overflow: hidden;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+      }
+      svg { width: 16px; height: 16px; flex: none; }
+      .icon-btn {
+        display: inline-grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 5px;
+        color: var(--muted);
+      }
+      .icon-btn:hover { background: var(--hover); color: var(--fg); }
+      .icon-btn:disabled { opacity: 0.35; cursor: default; background: none; }
+      :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+      .view { display: flex; flex-direction: column; height: 100%; min-width: 0; }
+      .view > * { min-width: 0; }
+      .view[hidden] { display: none; }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 12px 10px 8px 16px;
+        flex: none;
+      }
+      header .title { font-weight: 600; }
+      header .count { color: var(--muted); font-size: 12px; }
+      header .spacer { flex: 1; }
+
+      .scroll { flex: 1; overflow-y: auto; position: relative; }
+
+      .grid {
+        display: grid;
+        /* minmax(0, …) stops a large image's natural width from stretching the columns */
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+        padding: 4px 12px 16px;
+      }
+      .thumb {
+        aspect-ratio: 1;
+        border-radius: var(--radius);
+        overflow: hidden;
+        border: 1px solid var(--border);
+        background: var(--hover);
+        display: block;
+        width: 100%;
+        min-width: 0;
+      }
+      .thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.15s ease;
+      }
+      .thumb:hover img { transform: scale(1.03); }
+      .thumb.new { animation: fade-in 0.35s ease both; }
+      @keyframes fade-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+
+      .empty {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 24px;
+        text-align: center;
+      }
+      .empty[hidden] { display: none; }
+      .empty svg { width: 24px; height: 24px; color: var(--muted); }
+      .empty .line { font-weight: 500; }
+      .empty .hint { color: var(--muted); font-size: 12px; }
+
+      .drop {
+        position: fixed;
+        inset: 44px 8px 8px;
+        border: 1.5px dashed var(--muted);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--bg) 70%, transparent);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-weight: 500;
+        pointer-events: none;
+      }
+      .drop svg { width: 24px; height: 24px; }
+      body.dragging .drop { display: flex; }
+      body.dragging .grid { opacity: 0.35; }
+
+      .viewer-bar { padding: 10px 10px 8px; gap: 4px; }
+      .viewer-bar .position { color: var(--muted); font-size: 12px; margin-right: 2px; }
+      .stage { padding: 4px 12px 0; }
+      .stage img {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        max-height: calc(100vh - 170px);
+        object-fit: contain;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--hover);
+      }
+      .meta { padding: 10px 12px 0; font-size: 12px; }
+      .meta .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .meta .details { color: var(--muted); }
+      footer {
+        margin-top: auto;
+        border-top: 1px solid var(--border);
+        padding: 6px 8px;
+        flex: none;
+      }
+      .text-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px;
+        border-radius: 5px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .text-btn svg { width: 14px; height: 14px; }
+      .text-btn:hover { background: var(--hover); color: var(--danger); }
+
+      .toast {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: var(--fg);
+        color: var(--bg);
+        font-size: 12px;
+        display: none;
+      }
+      .toast.show { display: block; }
+    </style>
+  </head>
+  <body tabindex="-1">
+    <!-- Grid view -->
+    <section class="view" id="grid-view">
+      <header>
+        <span class="title">Inspo</span>
+        <span class="count" id="count"></span>
+        <span class="spacer"></span>
+        <button class="icon-btn" id="add" title="Add images" aria-label="Add images">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        </button>
+        <input type="file" id="file" accept="image/*" multiple hidden />
+      </header>
+      <div class="scroll">
+        <div class="grid" id="grid"></div>
+        <div class="empty" id="empty" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5h6"/><path d="M19 2v6"/><path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/><circle cx="9" cy="9" r="2"/></svg>
+          <div class="line">Paste or drop images</div>
+          <div class="hint">Click here, then ⌘V to paste a screenshot</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Enlarged view -->
+    <section class="view" id="viewer" hidden>
+      <header class="viewer-bar">
+        <button class="icon-btn" id="back" title="Back to grid" aria-label="Back to grid">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+        </button>
+        <span class="title">Inspo</span>
+        <span class="spacer"></span>
+        <span class="position" id="position"></span>
+        <button class="icon-btn" id="prev" title="Previous" aria-label="Previous image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button class="icon-btn" id="next" title="Next" aria-label="Next image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </header>
+      <div class="stage"><img id="big" alt="" /></div>
+      <div class="meta">
+        <div class="name" id="name"></div>
+        <div class="details" id="details"></div>
+      </div>
+      <footer>
+        <button class="text-btn" id="delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+          Delete
+        </button>
+      </footer>
+    </section>
+
+    <div class="drop" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 5h6"/><path d="M19 2v6"/><path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/><circle cx="9" cy="9" r="2"/></svg>
+      Drop to add
+    </div>
+    <div class="toast" id="toast" role="status"></div>
+
+    <script>
+      // ---------- Storage: images live in this plugin's own IndexedDB ----------
+      const DB_NAME = 'inspo'
+      const STORE = 'items'
+      const dbReady = new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1)
+        req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' })
+        req.onsuccess = () => resolve(req.result)
+        req.onerror = () => reject(req.error)
+      })
+      async function tx(mode, fn) {
+        const db = await dbReady
+        return new Promise((resolve, reject) => {
+          const t = db.transaction(STORE, mode)
+          const request = fn(t.objectStore(STORE))
+          t.oncomplete = () => resolve(request.result)
+          t.onerror = () => reject(t.error)
+          t.onabort = () => reject(t.error)
+        })
+      }
+      const getAll = () => tx('readonly', (s) => s.getAll())
+      const putItem = (item) => tx('readwrite', (s) => s.put(item))
+      const deleteItem = (id) => tx('readwrite', (s) => s.delete(id))
+
+      // ---------- State ----------
+      let items = [] // newest first: { id, name, type, blob, width, height, addedAt }
+      const urls = new Map() // id -> blob: URL
+      let current = -1 // index shown in the enlarged view
+      const $ = (id) => document.getElementById(id)
+
+      function urlFor(item) {
+        if (!urls.has(item.id)) urls.set(item.id, URL.createObjectURL(item.blob))
+        return urls.get(item.id)
+      }
+
+      // ---------- Grid ----------
+      function renderGrid(newIds = new Set()) {
+        $('grid').replaceChildren(
+          ...items.map((item, i) => {
+            const b = document.createElement('button')
+            b.className = 'thumb' + (newIds.has(item.id) ? ' new' : '')
+            b.title = item.name
+            b.setAttribute('aria-label', 'Open ' + item.name)
+            const img = document.createElement('img')
+            img.src = urlFor(item)
+            img.alt = ''
+            img.loading = 'lazy'
+            b.append(img)
+            b.onclick = () => openViewer(i)
+            return b
+          })
+        )
+        $('count').textContent = items.length ? String(items.length) : ''
+        $('empty').hidden = items.length > 0
+      }
+
+      // ---------- Adding images ----------
+      function readSize(blob) {
+        return new Promise((resolve) => {
+          const img = new Image()
+          const url = URL.createObjectURL(blob)
+          img.onload = () => { resolve({ width: img.naturalWidth, height: img.naturalHeight }); URL.revokeObjectURL(url) }
+          img.onerror = () => { resolve(null); URL.revokeObjectURL(url) }
+          img.src = url
+        })
+      }
+
+      async function addFiles(fileList) {
+        const files = [...fileList].filter((f) => f.type.startsWith('image/'))
+        if (!files.length) { toast('Only images can be added'); return }
+        const added = []
+        const batchStart = Date.now()
+        for (const [index, file] of files.entries()) {
+          const size = await readSize(file)
+          if (!size) { toast('Could not read ' + (file.name || 'that image')); continue }
+          const item = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            name: file.name && file.name !== 'image.png' ? file.name : 'Pasted image',
+            type: file.type,
+            blob: file,
+            width: size.width,
+            height: size.height,
+            addedAt: batchStart + index // distinct times keep a dropped batch in order after reload
+          }
+          try {
+            await putItem(item)
+            added.push(item)
+          } catch (e) {
+            toast('Could not save ' + item.name)
+          }
+        }
+        if (!added.length) return
+        items = [...added.reverse(), ...items]
+        renderGrid(new Set(added.map((i) => i.id)))
+        closeViewer()
+        document.querySelector('.scroll').scrollTop = 0
+      }
+
+      $('add').onclick = () => $('file').click()
+      $('file').onchange = (e) => { addFiles(e.target.files); e.target.value = '' }
+
+      document.addEventListener('paste', (e) => {
+        const files = [...(e.clipboardData?.items || [])]
+          .filter((i) => i.kind === 'file')
+          .map((i) => i.getAsFile())
+          .filter(Boolean)
+        if (files.length) { e.preventDefault(); addFiles(files) }
+      })
+
+      // Drag and drop anywhere on the panel
+      let dragDepth = 0
+      const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files')
+      document.addEventListener('dragenter', (e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        dragDepth++
+        document.body.classList.add('dragging')
+      })
+      document.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault() })
+      document.addEventListener('dragleave', () => {
+        dragDepth = Math.max(0, dragDepth - 1)
+        if (!dragDepth) document.body.classList.remove('dragging')
+      })
+      document.addEventListener('drop', (e) => {
+        e.preventDefault()
+        dragDepth = 0
+        document.body.classList.remove('dragging')
+        if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files)
+      })
+
+      // Clicking empty space focuses the panel so ⌘V reaches it
+      $('empty').onclick = () => document.body.focus()
+
+      // ---------- Enlarged view ----------
+      const dateLabel = (t) => {
+        const d = new Date(t)
+        if (d.toDateString() === new Date().toDateString()) return 'Added today'
+        return 'Added ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+      }
+
+      function openViewer(i) {
+        current = i
+        const item = items[i]
+        $('big').src = urlFor(item)
+        $('big').alt = item.name
+        $('name').textContent = item.name
+        $('details').textContent = dateLabel(item.addedAt) + ' · ' + item.width + ' × ' + item.height
+        $('position').textContent = i + 1 + ' of ' + items.length
+        $('prev').disabled = i === 0
+        $('next').disabled = i === items.length - 1
+        $('grid-view').hidden = true
+        $('viewer').hidden = false
+      }
+      function closeViewer() {
+        current = -1
+        $('viewer').hidden = true
+        $('grid-view').hidden = false
+      }
+      $('back').onclick = closeViewer
+      $('prev').onclick = () => current > 0 && openViewer(current - 1)
+      $('next').onclick = () => current < items.length - 1 && openViewer(current + 1)
+
+      $('delete').onclick = async () => {
+        const index = current
+        const item = items[index]
+        if (!item) return
+        try {
+          await deleteItem(item.id)
+        } catch (e) {
+          toast('Could not delete ' + item.name)
+          return
+        }
+        URL.revokeObjectURL(urls.get(item.id))
+        urls.delete(item.id)
+        items.splice(index, 1)
+        renderGrid()
+        if (!items.length) closeViewer()
+        else openViewer(Math.min(index, items.length - 1))
+        toast('Deleted ' + item.name)
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (current < 0) return
+        if (e.key === 'Escape') closeViewer()
+        else if (e.key === 'ArrowLeft') $('prev').click()
+        else if (e.key === 'ArrowRight') $('next').click()
+      })
+
+      // ---------- Toast ----------
+      let toastTimer
+      function toast(text) {
+        const t = $('toast')
+        t.textContent = text
+        t.classList.add('show')
+        clearTimeout(toastTimer)
+        toastTimer = setTimeout(() => t.classList.remove('show'), 2200)
+      }
+
+      // ---------- Start ----------
+      getAll()
+        .then((all) => {
+          items = all.sort((a, b) => b.addedAt - a.addedAt)
+          renderGrid()
+        })
+        .catch(() => {
+          renderGrid()
+          toast('Saved images could not be loaded')
+        })
+    </script>
+  </body>
+</html>

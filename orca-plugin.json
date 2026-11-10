@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 2,
+  "id": "inspo",
+  "name": "Inspo",
+  "version": "0.1.0",
+  "description": "A sidebar board for visual inspiration: paste or drop screenshots and images while you work.",
+  "engines": {
+    "orca": ">=1.4.246"
+  },
+  "execution": "sandboxed-ui",
+  "contributes": {
+    "panels": [
+      {
+        "id": "inspo",
+        "title": "Inspo",
+        "icon": "lightbulb",
+        "entry": "panel/index.html"
+      }
+    ]
+  }
+}
