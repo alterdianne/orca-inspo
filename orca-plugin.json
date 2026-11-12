@@ -15,6 +15,12 @@
         "title": "Inspo",
         "icon": "lightbulb",
         "entry": "panel/index.html"
+      },
+      {
+        "id": "trash",
+        "title": "Trash",
+        "icon": "trash-2",
+        "entry": "panel/trash.html"
       }
     ]
   }
